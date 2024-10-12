@@ -34,8 +34,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	certsv1 "github.com/rajendragosavi/cert-issuer/api/v1"
+	"github.com/rajendragosavi/cert-issuer/internal/pkg"
 )
 
 // CertificateReconciler reconciles a Certificate object
@@ -74,6 +76,13 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Ensure the Certificate has a finalizer
+	if !controllerutil.ContainsFinalizer(&cert, "certs.k8c.io/finalizer") {
+		controllerutil.AddFinalizer(&cert, "certs.k8c.io/finalizer")
+		if err := r.Update(ctx, &cert); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 	// Handle Deletion of Certificate resource
 	if !cert.ObjectMeta.DeletionTimestamp.IsZero() {
 		log.V(1).Info("Deleting associated Secret", "SecretName", cert.Spec.SecretRef.Name)
@@ -85,6 +94,11 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		})
 		if err != nil && !apierrors.IsNotFound(err) {
 			log.Error(err, "Failed to delete Secret for Certificate", "SecretName", cert.Spec.SecretRef.Name)
+			return ctrl.Result{}, err
+		}
+		// Remove finalizer after secret deletion
+		controllerutil.RemoveFinalizer(&cert, "certs.k8c.io/finalizer")
+		if err := r.Update(ctx, &cert); err != nil {
 			return ctrl.Result{}, err
 		}
 		log.V(1).Info("Secret successfully deleted", "SecretName", cert.Spec.SecretRef.Name)
@@ -108,8 +122,14 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
+	validityDuration, err := pkg.ParseDuration(cert.Spec.Validity)
+	if err != nil {
+		log.Error(err, "Failed to parse certificate validity")
+		return ctrl.Result{}, err
+	}
+
 	// Generate a new TLS certificate
-	tlsCert, err := r.generateSelfSignedCert(cert.Spec.DNSName, cert.Spec.Validity)
+	tlsCert, err := r.generateSelfSignedCert(cert.Spec.DNSName, validityDuration)
 	if err != nil {
 		log.Error(err, "Failed to generate TLS certificate")
 		return ctrl.Result{}, err
@@ -122,24 +142,15 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 	log.V(1).Info("Successfully created Secret for TLS certificate", "SecretName", cert.Spec.SecretRef.Name)
+	cert.Status.Issued = true
+	cert.Status.ExpiringOn = tlsCert.ExpiringON.Format(time.RFC3339)
+	if err := r.Status().Update(ctx, &cert); err != nil {
+		log.Error(err, "Failed to update certificate status")
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
-
-// TLSCertificate stores the PEM encoded certificate and private key
-type TLSCertificate struct {
-	Certificate []byte
-	PrivateKey  []byte
-	ExpiringON  time.Time
-}
-
-// pemBlockForKey converts the RSA private key to a PEM block
-// func pemBlockForKey(key *rsa.PrivateKey) *pem.Block {
-// 	return &pem.Block{
-// 		Type:  "RSA PRIVATE KEY",
-// 		Bytes: x509.MarshalPKCS1PrivateKey(key),
-// 	}
-// }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *CertificateReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -148,7 +159,10 @@ func (r *CertificateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *CertificateReconciler) CreateSecret(cert *TLSCertificate, certObj *certsv1.Certificate) error {
+func (r *CertificateReconciler) CreateSecret(cert *pkg.TLSCertificate, certObj *certsv1.Certificate) error {
+	if cert == nil {
+		return errors.New("tlsCert cannot be nil")
+	}
 	if certObj != nil {
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -168,9 +182,9 @@ func (r *CertificateReconciler) CreateSecret(cert *TLSCertificate, certObj *cert
 	}
 }
 
-func (r *CertificateReconciler) generateSelfSignedCert(dnsName string, validity int) (*TLSCertificate, error) {
+func (r *CertificateReconciler) generateSelfSignedCert(dnsName string, validity time.Duration) (*pkg.TLSCertificate, error) {
 	// Set the expiration date based on the provided validity duration
-	notAfter := time.Now().Add(time.Duration(validity) * 24 * time.Hour)
+	notAfter := time.Now().Add(validity)
 
 	// Generate ECDSA private key
 	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
@@ -203,20 +217,11 @@ func (r *CertificateReconciler) generateSelfSignedCert(dnsName string, validity 
 
 	// PEM encode the certificate and private key
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	keyPEM := pem.EncodeToMemory(pemBlockForKey(priv))
+	keyPEM := pem.EncodeToMemory(pkg.PemBlockForKey(priv))
 
-	return &TLSCertificate{
+	return &pkg.TLSCertificate{
 		Certificate: certPEM,
 		PrivateKey:  keyPEM,
 		ExpiringON:  notAfter,
 	}, nil
-}
-
-// Helper function to encode ECDSA private key to PEM format
-func pemBlockForKey(priv *ecdsa.PrivateKey) *pem.Block {
-	b, err := x509.MarshalECPrivateKey(priv)
-	if err != nil {
-		panic(err) // Handle this error properly in production
-	}
-	return &pem.Block{Type: "EC PRIVATE KEY", Bytes: b}
 }

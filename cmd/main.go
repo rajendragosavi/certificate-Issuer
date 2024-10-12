@@ -126,6 +126,11 @@ func main() {
 	if err = (&controller.CertificateReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Logger: mgr.GetLogger().WithValues(
+			"controller_name", "certificate-issuer",
+			"controller_group", "certs.k8c.io",
+			"controller_kind", "Certificate",
+		),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Certificate")
 		os.Exit(1)

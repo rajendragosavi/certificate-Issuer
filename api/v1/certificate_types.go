@@ -26,7 +26,7 @@ import (
 // CertificateSpec defines the desired state of Certificate
 type CertificateSpec struct {
 	DNSName   string          `json:"dnsName"`
-	Validity  int             `json:"validity"`
+	Validity  string          `json:"validity"`
 	SecretRef SecretReference `json:"secretRef"`
 }
 
@@ -38,7 +38,7 @@ type SecretReference struct {
 type CertificateStatus struct {
 	Issued     bool   `json:"issued"`
 	ExpiringOn string `json:"expiringOn"`
-	isExpired  bool   `json:"isExpired"`
+	IsExpired  bool   `json:"isExpired"`
 }
 
 // +kubebuilder:object:root=true

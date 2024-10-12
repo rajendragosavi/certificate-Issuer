@@ -8,6 +8,7 @@ import (
 
 	certsv1 "github.com/rajendragosavi/cert-issuer/api/v1"
 	ctrl "github.com/rajendragosavi/cert-issuer/internal/controller"
+	"github.com/rajendragosavi/cert-issuer/internal/pkg"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -56,7 +57,7 @@ func TestCreateSecret_Success(t *testing.T) {
 	}
 
 	// Create a mock TLSCertificate object
-	tlsCert := &ctrl.TLSCertificate{
+	tlsCert := &pkg.TLSCertificate{
 		Certificate: []byte("fake-cert-data"),
 		PrivateKey:  []byte("fake-key-data"),
 		ExpiringON:  time.Now().Add(365 * 24 * time.Hour),
@@ -91,7 +92,7 @@ func TestCreateSecret_NilCertificateObject(t *testing.T) {
 	_, r := setupTest(t)
 
 	// Create a mock TLSCertificate object
-	tlsCert := &ctrl.TLSCertificate{
+	tlsCert := &pkg.TLSCertificate{
 		Certificate: []byte("fake-cert-data"),
 		PrivateKey:  []byte("fake-key-data"),
 		ExpiringON:  time.Now().Add(365 * 24 * time.Hour),
@@ -147,7 +148,7 @@ func TestCreateSecret_ErrorOnSecretCreation(t *testing.T) {
 	}
 
 	// Create a mock TLSCertificate object
-	tlsCert := &ctrl.TLSCertificate{
+	tlsCert := &pkg.TLSCertificate{
 		Certificate: []byte("fake-cert-data"),
 		PrivateKey:  []byte("fake-key-data"),
 		ExpiringON:  time.Now().Add(365 * 24 * time.Hour),
