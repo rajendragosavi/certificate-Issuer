@@ -157,15 +157,4 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-
-
-
-
-Notes :::: 
-
-
-/Users/rajendragosavi/opensource/certificate-Issuer/bin/golangci-lint-v1.57.2 run
-api/v1/certificate_types.go:41:2: field `isExpired` is unused (unused)
-	isExpired  bool   `json:"isExpired"`
-	^
-make: *** [lint] Error 1
+Demo : [![asciicast](https://asciinema.org/a/5EZdG6sfRsPM6NCbm6QycyRRY)](https://asciinema.org/a/5EZdG6sfRsPM6NCbm6QycyRRY)
