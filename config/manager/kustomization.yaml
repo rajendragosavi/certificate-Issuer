@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: rajendra95/certificate-manager
-  newTag: 7d7867
+  newTag: 77e0cc

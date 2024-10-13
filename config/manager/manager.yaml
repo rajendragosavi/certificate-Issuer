@@ -36,7 +36,7 @@ spec:
         args:
           - --leader-elect
           - --health-probe-bind-address=:8081
-        image: rajendra95/certificate-manager:v1
+        image: rajendra95/certificate-manager:77e0cc
         name: manager
         securityContext:
           allowPrivilegeEscalation: false
